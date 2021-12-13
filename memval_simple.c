@@ -1,61 +1,61 @@
 /* ******************************************************************************
- * Copyright (c) 2017-2021 Google, Inc.  All rights reserved.
- * ******************************************************************************/
+* Copyright (c) 2017-2021 Google, Inc.  All rights reserved.
+* ******************************************************************************/
 
 /*
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * * Redistributions of source code must retain the above copyright notice,
- *   this list of conditions and the following disclaimer.
- *
- * * Redistributions in binary form must reproduce the above copyright notice,
- *   this list of conditions and the following disclaimer in the documentation
- *   and/or other materials provided with the distribution.
- *
- * * Neither the name of VMware, Inc. nor the names of its contributors may be
- *   used to endorse or promote products derived from this software without
- *   specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL VMWARE, INC. OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
- * DAMAGE.
- */
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* * Redistributions of source code must retain the above copyright notice,
+*   this list of conditions and the following disclaimer.
+*
+* * Redistributions in binary form must reproduce the above copyright notice,
+*   this list of conditions and the following disclaimer in the documentation
+*   and/or other materials provided with the distribution.
+*
+* * Neither the name of VMware, Inc. nor the names of its contributors may be
+*   used to endorse or promote products derived from this software without
+*   specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+* ARE DISCLAIMED. IN NO EVENT SHALL VMWARE, INC. OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+* OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+* DAMAGE.
+*/
 
 /* Code Manipulation API Sample:
- * memval_simple.c
- *
- * Records and dumps app write addresses, and their corresponding written values.
- *
- * (1) It fills two per-thread-buffers with inlined instrumentation.
- * (2) Once the buffers have been filled up, a fault handler will redirect execution
- *     to our trace buffer handler, where we dump the memrefs to disk.
- *
- * This sample illustrates
- * - inserting instrumentation after the current instruction to read the value
- *   written by it;
- * - the use of drutil_expand_rep_string() to expand string loops to obtain
- *   every memory reference;
- * - the use of drx_expand_scatter_gather() to expand scatter/gather instrs
- *   into a set of functionally equivalent stores/loads;
- * - the use of drutil_opnd_mem_size_in_bytes() to obtain the size of OP_enter
- *   memory references;
- * - the use of drutil_insert_get_mem_addr() to insert instructions to compute
- *   the address of each memory reference;
- * - the use of the drx_buf extension to fill buffers in a platform-independent
- *   manner.
- *
- * This client is a simple implementation of a memory reference tracing tool
- * without instrumentation optimization.
- */
+* memval_simple.c
+*
+* Records and dumps app write addresses, and their corresponding written values.
+*
+* (1) It fills two per-thread-buffers with inlined instrumentation.
+* (2) Once the buffers have been filled up, a fault handler will redirect execution
+*     to our trace buffer handler, where we dump the memrefs to disk.
+*
+* This sample illustrates
+* - inserting instrumentation after the current instruction to read the value
+*   written by it;
+* - the use of drutil_expand_rep_string() to expand string loops to obtain
+*   every memory reference;
+* - the use of drx_expand_scatter_gather() to expand scatter/gather instrs
+*   into a set of functionally equivalent stores/loads;
+* - the use of drutil_opnd_mem_size_in_bytes() to obtain the size of OP_enter
+*   memory references;
+* - the use of drutil_insert_get_mem_addr() to insert instructions to compute
+*   the address of each memory reference;
+* - the use of the drx_buf extension to fill buffers in a platform-independent
+*   manner.
+*
+* This client is a simple implementation of a memory reference tracing tool
+* without instrumentation optimization.
+*/
 
 
 
@@ -69,8 +69,8 @@
 #include "drx.h"
 
 /**
- * Merged code
- */
+* Merged code
+*/
 #include <unistd.h>
 #include <libpmemobj/base.h>
 #include <libpmemobj/pool_base.h>
@@ -113,28 +113,28 @@ static size_t max_malloc;
 #define MALLOC_ROUTINE_NAME IF_WINDOWS_ELSE("HeapAlloc", "malloc")
 
 bool file_exists(const char *path){
-    return access(path, F_OK) != 0;
+   return access(path, F_OK) != 0;
 }
 
 struct my_root {
-    //PMEMmutex lock;
-    char this_is_on_pmem[2021];
+   //PMEMmutex lock;
+   char this_is_on_pmem[2021];
 };
 
 static const char *desc[] = {
-    "TX_STAGE_NONE",
-    "TX_STAGE_WORK",
-    "TX_STAGE_ONCOMMIT",
-    "TX_STAGE_ONABORT",
-    "TX_STAGE_FINALLY",
-    "WTF?"
+   "TX_STAGE_NONE",
+   "TX_STAGE_WORK",
+   "TX_STAGE_ONCOMMIT",
+   "TX_STAGE_ONABORT",
+   "TX_STAGE_FINALLY",
+   "WTF?"
 };
 
 static void
 log_stages(PMEMobjpool *pop_local, enum pobj_tx_stage stage, void *arg)
 {
-    printf("cb stage: %s", desc[stage]);
-    dr_fprintf(STDERR, "cb stage: ", desc[stage], " ");
+   printf("cb stage: %s \n", desc[stage]);
+   //dr_fprintf(STDERR, "cb stage: ", desc[stage], " ");
 }
 
 static bool file_was_created = false;
@@ -142,114 +142,143 @@ static bool file_was_created = false;
 static void
 module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
 {
-    if(!file_was_created) {
-        file_was_created = true;
-        const char *path_to_pmem = "wrap_pmem_file_0";
+   if(!file_was_created) {
+       file_was_created = true;
+       const char *path_to_pmem = "/mnt/dax/test_outputs/wrap_pmem_file_0";
 
-        if (file_exists((path_to_pmem)) != 0) {
-            perror("Creating a file");
-            if ((pop = pmemobj_create(path_to_pmem, POBJ_LAYOUT_NAME(list),
-                                      PMEMOBJ_MIN_POOL, 0666)) == NULL) {
-                perror("failed to create pool\n");
-            }
-        } else {
-            perror("Opening a file");
-            if ((pop = pmemobj_open(path_to_pmem, POBJ_LAYOUT_NAME(list))) == NULL) {
-                perror("failed to open pool\n");
-            }
-        }
+       if (file_exists((path_to_pmem)) != 0) {
+           perror("Creating a file");
+           if ((pop = pmemobj_create(path_to_pmem, POBJ_LAYOUT_NAME(list),
+                                     PMEMOBJ_MIN_POOL, 0666)) == NULL) {
+               perror("failed to create pool\n");
+           }
+       } else {
+           perror("Opening a file");
+           if ((pop = pmemobj_open(path_to_pmem, POBJ_LAYOUT_NAME(list))) == NULL) {
+               perror("failed to open pool\n");
+           }
+       }
 
-        perror("Creating root \n");
-        root = pmemobj_root(pop, sizeof(struct my_root));
-        perror("Root initialized \n");
-        rootp = pmemobj_direct(root);
-        perror("Rootp initialized \n");
+       perror("Creating root \n");
+       root = pmemobj_root(pop, sizeof(struct my_root));
+       perror("Root initialized \n");
+       rootp = pmemobj_direct(root);
+       perror("Rootp initialized \n");
 
-        TX_BEGIN(pop){
-            pmemobj_tx_add_range(root, 0, 64);
-        } TX_END
+       /**
+       TX_BEGIN(pop){
+           pmemobj_tx_add_range(root, 0, 64);
+       } TX_END
+       **/
+       /**
+       pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
+                        TX_PARAM_NONE);
+       //Commit without begin results in a failure
+       pmemobj_tx_commit();
+**/
+       //pmemobj_tx_add_range(root, 0, 128);
+       pmemobj_memcpy_persist(pop, rootp->this_is_on_pmem, "Old Value", 10);
+       //pmemobj_tx_commit();
+       void *mem = rootp->this_is_on_pmem;
+       if(mem == NULL){
+           printf("Mem was null");
+       } else {
+           printf("Mem was not null");
+       }
 
-        //Commit without begin results in a failure
-        //pmemobj_tx_commit();
-        pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
-                         TX_PARAM_NONE);
-        pmemobj_tx_add_range(root, 0, 128);
-        pmemobj_memcpy_persist(pop, rootp->this_is_on_pmem, "Old Value", 10);
-        //pmemobj_tx_commit();
-        void *mem = rootp->this_is_on_pmem;
-        if(mem == NULL){
-            printf("Mem was null");
-        } else {
-            printf("Mem was not null");
-        }
+   }
 
-    }
-
-    app_pc towrap = (app_pc)dr_get_proc_address(mod->handle, MALLOC_ROUTINE_NAME);
-    if (towrap != NULL) {
+   app_pc towrap = (app_pc)dr_get_proc_address(mod->handle, MALLOC_ROUTINE_NAME);
+   if (towrap != NULL) {
 #ifdef SHOW_RESULTS
-        bool ok =
+       bool ok =
 #endif
-            drwrap_wrap(towrap, wrap_pre, wrap_post);
+           drwrap_wrap(towrap, wrap_pre, wrap_post);
 #ifdef SHOW_RESULTS
-        if (ok) {
-            dr_fprintf(STDERR, "<wrapped " MALLOC_ROUTINE_NAME " @" PFX "\n", towrap);
-        } else {
+       if (ok) {
+           dr_fprintf(STDERR, "<wrapped " MALLOC_ROUTINE_NAME " @" PFX "\n", towrap);
+       } else {
 
-            dr_fprintf(STDERR,
-                       "<FAILED to wrap " MALLOC_ROUTINE_NAME " @" PFX
-                       ": already wrapped?\n",
-                       towrap);
-        }
+           dr_fprintf(STDERR,
+                      "<FAILED to wrap " MALLOC_ROUTINE_NAME " @" PFX
+                      ": already wrapped?\n",
+                      towrap);
+       }
 #endif
-    }
-    perror("Wrap is complere okay \n");
+   }
+   perror("Wrap is complere okay \n");
 }
 
 
 static void
 wrap_pre(void *wrapcxt, OUT void **user_data)
 {
-    perror("Wrap pre \n");
-    size_t sz = (size_t)drwrap_get_arg(wrapcxt, IF_WINDOWS_ELSE(2, 0));
-    perror("get arg \n");
-    if (sz > max_malloc) {
-        perror("before mutex  \n");
-        //dr_mutex_lock(max_lock);
-        perror("got mutex  \n");
-        if (sz > max_malloc)
-            max_malloc = sz;
-        //dr_mutex_unlock(max_lock);
-        perror("released mutex \n");
-    }
-    *user_data = (void *)sz;
-    perror("Wrap pre finished \n");
+
+   size_t sz = (size_t)drwrap_get_arg(wrapcxt, IF_WINDOWS_ELSE(2, 0));
+
+   if (sz > max_malloc) {
+
+       //dr_mutex_lock(max_lock);
+
+       if (sz > max_malloc)
+           max_malloc = sz;
+       //dr_mutex_unlock(max_lock);
+
+   }
+   *user_data = (void *)sz;
+
 }
 
+static bool first_entry = true;
+//static int wrap_tx_counter = 0;
 static void
 wrap_post(void *wrapcxt, void *user_data)
 {
-    perror("OUTSIDE of SHOW results \n");
+
 #ifdef SHOW_RESULTS
-    size_t sz = (size_t)user_data;
-    perror("Running a wrapped_post ");
-    if(sz == 2021){
-        drwrap_set_retval(wrapcxt, rootp->this_is_on_pmem);
-    }
-    perror("Exiting wrapped post \n");
+   size_t sz = (size_t)user_data;
+   //if(sz == sizeof (int)){
+   if(sz == 2021){
+       /*
+        * If block looks to act correct, but crashes after
+        */
+
+       if(!first_entry){
+           //wrap_tx_counter++;
+           perror("Commiting transaction! \n");
+           pmemobj_tx_commit();
+           perror("Ending transaction! \n");
+           pmemobj_tx_end();
+
+       } else {
+           first_entry = false;
+           //wrap_tx_counter++;
+       }
+       perror("Starting a new transaction \n");
+       pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
+                        TX_PARAM_NONE);
+
+       //Looks like only one transaction can be excuted and commited
+       //pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
+       //                 TX_PARAM_NONE);
+       //sleep(1);
+       //
+       drwrap_set_retval(wrapcxt, rootp->this_is_on_pmem);
+   }
+
 #endif
 }
 
 /////////////////////////////
 
 /* We opt to use two buffers -- one to hold only mem_ref_t structs, and another to hold
- * the raw bytes written. This is done for simplicity, as we will never get a partial
- * write to the trace buffer (holding mem_ref_t's), which simplifies the handler logic.
- */
+* the raw bytes written. This is done for simplicity, as we will never get a partial
+* write to the trace buffer (holding mem_ref_t's), which simplifies the handler logic.
+*/
 typedef struct _mem_ref_t {
-    ushort size; /* mem ref size */
-    ushort type; /* instr opcode */
-    app_pc addr; /* mem ref addr */
+   ushort size; /* mem ref size */
+   ushort type; /* instr opcode */
+   app_pc addr; /* mem ref addr */
 } mem_ref_t;
 
 /* Max number of mem_ref a buffer can have. */
@@ -257,23 +286,23 @@ typedef struct _mem_ref_t {
 /* The maximum size of buffer for holding mem_refs. */
 #define MEM_BUF_SIZE (sizeof(mem_ref_t) * MAX_NUM_MEM_REFS)
 /* The maximum size of buffer for holding writes. Writes on average don't get too large,
- * but we give ourselves some leeway and say chains of consecutive writes are on average
- * less than 32 bytes each.
- */
+* but we give ourselves some leeway and say chains of consecutive writes are on average
+* less than 32 bytes each.
+*/
 #define WRT_BUF_SIZE (MAX_NUM_MEM_REFS * 32)
 
 #define MINSERT instrlist_meta_preinsert
 
 /* Thread-private log file. */
 typedef struct {
-    file_t log;
-    FILE *logf;
+   file_t log;
+   FILE *logf;
 } per_thread_t;
 
 /* Cross-instrumentation-phase data. */
 typedef struct {
-    reg_id_t reg_addr;
-    int last_opcode;
+   reg_id_t reg_addr;
+   int last_opcode;
 } instru_data_t;
 
 static client_id_t client_id;
@@ -285,370 +314,395 @@ static drx_buf_t *trace_buffer;
 static char *
 write_hexdump(char *hex_buf, byte *write_base, mem_ref_t *mem_ref)
 {
-    int i;
-    char *hexstring = hex_buf, *needle = hex_buf;
+   int i;
+   char *hexstring = hex_buf, *needle = hex_buf;
 
-    for (i = mem_ref->size - 1; i >= 0; --i) {
-        needle += dr_snprintf(needle, 2 * mem_ref->size + 1 - (needle - hex_buf), "%02x",
-                              write_base[i]);
-    }
-    return hexstring;
+   for (i = mem_ref->size - 1; i >= 0; --i) {
+       needle += dr_snprintf(needle, 2 * mem_ref->size + 1 - (needle - hex_buf), "%02x",
+                             write_base[i]);
+   }
+   return hexstring;
 }
 
 /* Called when the trace buffer has filled up, and needs to be flushed to disk. */
 static void
 trace_fault(void *drcontext, void *buf_base, size_t size)
 {
-    per_thread_t *data = drmgr_get_tls_field(drcontext, tls_idx);
-    mem_ref_t *trace_base = (mem_ref_t *)(char *)buf_base;
-    mem_ref_t *trace_ptr = (mem_ref_t *)((char *)buf_base + size);
-    byte *write_base = drx_buf_get_buffer_base(drcontext, write_buffer);
-    byte *write_ptr = drx_buf_get_buffer_ptr(drcontext, write_buffer);
-    int largest_size = 0;
-    mem_ref_t *mem_ref;
-    char *hex_buf;
+   per_thread_t *data = drmgr_get_tls_field(drcontext, tls_idx);
+   mem_ref_t *trace_base = (mem_ref_t *)(char *)buf_base;
+   mem_ref_t *trace_ptr = (mem_ref_t *)((char *)buf_base + size);
+   byte *write_base = drx_buf_get_buffer_base(drcontext, write_buffer);
+   byte *write_ptr = drx_buf_get_buffer_ptr(drcontext, write_buffer);
+   int largest_size = 0;
+   mem_ref_t *mem_ref;
+   char *hex_buf;
 
-    /* find the largest necessary buffer so we only perform a single allocation */
-    for (mem_ref = trace_base; mem_ref < trace_ptr; mem_ref++) {
-        if (mem_ref->size > largest_size)
-            largest_size = mem_ref->size;
-    }
-    hex_buf = dr_thread_alloc(drcontext, 2 * largest_size + 1);
-    /* write the memrefs to disk */
-    for (mem_ref = trace_base; mem_ref < trace_ptr; mem_ref++) {
-        /* Each memref in the trace buffer has an "associated" write in the write buffer.
-         * We pull mem_ref->size bytes from the write buffer, and assert we haven't yet
-         * gone too far.
-         */
-        /* We use libc's fprintf as it is buffered and much faster than dr_fprintf for
-         * repeated printing that dominates performance, as the printing does here. Note
-         * that a binary dump is *much* faster than fprintf still.
-         */
-        char *payload = malloc(100);
-        memcpy(payload, mem_ref->addr, 99);
+   /* find the largest necessary buffer so we only perform a single allocation */
+   for (mem_ref = trace_base; mem_ref < trace_ptr; mem_ref++) {
+       if (mem_ref->size > largest_size)
+           largest_size = mem_ref->size;
+   }
+   hex_buf = dr_thread_alloc(drcontext, 2 * largest_size + 1);
+   /* write the memrefs to disk */
+   for (mem_ref = trace_base; mem_ref < trace_ptr; mem_ref++) {
+       /* Each memref in the trace buffer has an "associated" write in the write buffer.
+        * We pull mem_ref->size bytes from the write buffer, and assert we haven't yet
+        * gone too far.
+        */
+       /* We use libc's fprintf as it is buffered and much faster than dr_fprintf for
+        * repeated printing that dominates performance, as the printing does here. Note
+        * that a binary dump is *much* faster than fprintf still.
+        */
+       char *payload = malloc(100);
+       memcpy(payload, mem_ref->addr, 99);
 
-        fprintf(data->logf, "" PFX ": %s %2d %s %s\n", mem_ref->addr,
-                decode_opcode_name(mem_ref->type), mem_ref->size,
-                write_hexdump(hex_buf, write_base, mem_ref),
-                payload
-                );
-        write_base += mem_ref->size;
-        DR_ASSERT(write_base <= write_ptr);
-    }
-    dr_thread_free(drcontext, hex_buf, 2 * largest_size + 1);
-    /* reset the write buffer (note: the trace buffer gets reset automatically) */
-    drx_buf_set_buffer_ptr(drcontext, write_buffer,
-                           drx_buf_get_buffer_base(drcontext, write_buffer));
+       fprintf(data->logf, "" PFX ": %s %2d %s %s\n", mem_ref->addr,
+               decode_opcode_name(mem_ref->type), mem_ref->size,
+               write_hexdump(hex_buf, write_base, mem_ref),
+               payload
+       );
+       write_base += mem_ref->size;
+       DR_ASSERT(write_base <= write_ptr);
+   }
+   dr_thread_free(drcontext, hex_buf, 2 * largest_size + 1);
+   /* reset the write buffer (note: the trace buffer gets reset automatically) */
+   drx_buf_set_buffer_ptr(drcontext, write_buffer,
+                          drx_buf_get_buffer_base(drcontext, write_buffer));
 }
 
-static int tx_flag = 0;
+//static int tx_flag = 0;
+static int pmem_op = false;
 static void catch_mem_ref(uintptr_t *addr, uintptr_t *pc, uint size);
 static void catch_mem_ref(uintptr_t *addr, uintptr_t *pc, uint size){
-    //Check if this is pmem refference and add to transaction
-    //printf("From catch mem ref %p %p \n", addr, pc);
-    uintptr_t *start = (uintptr_t *)rootp->this_is_on_pmem;
-    uintptr_t *finish = (uintptr_t *)rootp->this_is_on_pmem + 2021;
-    if(addr >= start && addr <=finish){
+   //Check if this is pmem refference and add to transaction
+   //printf("From catch mem ref %p %p \n", addr, pc);
+   uintptr_t *start = (uintptr_t *)rootp->this_is_on_pmem;
+   uintptr_t *finish = (uintptr_t *)rootp->this_is_on_pmem + 2021;
+   pmem_op = false;
+   if(addr >= start && addr <=finish){
 
-        //pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
-        //                 TX_PARAM_NONE);
-        if(tx_flag == 0){
-            tx_flag = 1;
-            //pmemobj_tx_add_range(root, 0, 128);
-            pmemobj_tx_add_range_direct(addr, 64);
-            pmemobj_tx_commit();
-        }
-        //pmemobj_tx_commit();
+       //pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
+       //                 TX_PARAM_NONE);
 
-        pmemobj_memcpy_persist(pop, rootp->this_is_on_pmem, "Old Value", 10);
-        //pmemobj_tx_commit();
+       /*
+        * Flag this operation as pmem, so it can be commited post_write
+        */
+       printf("Spotted pmem! \n");
+       printf("From catch mem ref %p %u \n", addr, size);
+       pmem_op = true;
+       perror("Adding to transaction \n");
+       pmemobj_tx_add_range_direct(addr, 64);
+       /**
+       if(tx_flag == 0){
+           tx_flag = 1;
+           //pmemobj_tx_add_range(root, 0, 128); ]=-98uop[]
 
-        printf("Spotted pmem! \n");
-        printf("From catch mem ref %p %u \n", addr, size);
-    }
 
-    //printf("From catch mem ref %s %p \n", (char *)addr, pc);
+       //Should work without a flag because tx is started everytime there is a call to malloc(2021)
+           pmemobj_tx_add_range_direct(addr, 64);
+           //This happens more often then tx_begin
+           pmemobj_tx_commit();
+       }
+        **/
+       //pmemobj_tx_commit();
+
+       //pmemobj_memcpy_persist(pop, rootp->this_is_on_pmem, "Old Value", 10);
+       //pmemobj_tx_commit();
+
+
+   }
+
+   //printf("From catch mem ref %s %p \n", (char *)addr, pc);
 }
 //FOO BAR random words here!
 static reg_id_t
 instrument_pre_write(void *drcontext, instrlist_t *ilist, instr_t *where, int opcode,
-                     instr_t *instr_operands, opnd_t ref)
+                    instr_t *instr_operands, opnd_t ref)
 {
-    reg_id_t reg_ptr, reg_tmp, reg_addr;
-    ushort type, size;
-    bool ok;
+   reg_id_t reg_ptr, reg_tmp, reg_addr;
+   ushort type, size;
+   bool ok;
 
-    //instr_t *instr = instrlist_first(ilist);
+   //instr_t *instr = instrlist_first(ilist);
 
-    //printf("OPND INSTR %p \n",  (instr_get_dst(instr,0)));
+   //printf("OPND INSTR %p \n",  (instr_get_dst(instr,0)));
 
-    //fprintf(STDERR, "where: %s", where, "\n");
+   //fprintf(STDERR, "where: %s", where, "\n");
 
-    if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_tmp) !=
-        DRREG_SUCCESS) {
-        DR_ASSERT(false);
-        return DR_REG_NULL;
-    }
-    if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_ptr) !=
-        DRREG_SUCCESS) {
-        DR_ASSERT(false);
-        return DR_REG_NULL;
-    }
+   if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_tmp) !=
+       DRREG_SUCCESS) {
+       DR_ASSERT(false);
+       return DR_REG_NULL;
+   }
+   if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_ptr) !=
+       DRREG_SUCCESS) {
+       DR_ASSERT(false);
+       return DR_REG_NULL;
+   }
 
-    //app_pc addr = instr_get_app_pc(instr_operands);
+   //app_pc addr = instr_get_app_pc(instr_operands);
 
-    //printf("APP_PC: %p \n", addr);
+   //printf("APP_PC: %p \n", addr);
 
-    /* i#2449: In the situation that instrument_post_write, instrument_pre_write and ref
-     * all have the same register reserved, drutil_insert_get_mem_addr will compute the
-     * address of an operand using an incorrect register value, as drreg will elide the
-     * save/restore.
-     */
-    if (opnd_uses_reg(ref, reg_tmp) &&
-        drreg_get_app_value(drcontext, ilist, where, reg_tmp, reg_tmp) != DRREG_SUCCESS) {
-        DR_ASSERT(false);
-        return DR_REG_NULL;
-    }
-    if (opnd_uses_reg(ref, reg_ptr) &&
-        drreg_get_app_value(drcontext, ilist, where, reg_ptr, reg_ptr) != DRREG_SUCCESS) {
-        DR_ASSERT(false);
-        return DR_REG_NULL;
-    }
+   /* i#2449: In the situation that instrument_post_write, instrument_pre_write and ref
+    * all have the same register reserved, drutil_insert_get_mem_addr will compute the
+    * address of an operand using an incorrect register value, as drreg will elide the
+    * save/restore.
+    */
+   if (opnd_uses_reg(ref, reg_tmp) &&
+       drreg_get_app_value(drcontext, ilist, where, reg_tmp, reg_tmp) != DRREG_SUCCESS) {
+       DR_ASSERT(false);
+       return DR_REG_NULL;
+   }
+   if (opnd_uses_reg(ref, reg_ptr) &&
+       drreg_get_app_value(drcontext, ilist, where, reg_ptr, reg_ptr) != DRREG_SUCCESS) {
+       DR_ASSERT(false);
+       return DR_REG_NULL;
+   }
 
-    /* We use reg_ptr as scratch to get addr. Note we do this first as reg_ptr or reg_tmp
-     * may be used in ref.
-     */
-    ok = drutil_insert_get_mem_addr(drcontext, ilist, where, ref, reg_tmp, reg_ptr);
-    DR_ASSERT(ok);
-    drx_buf_insert_load_buf_ptr(drcontext, trace_buffer, ilist, where, reg_ptr);
-    /* inserts memref addr */
+   /* We use reg_ptr as scratch to get addr. Note we do this first as reg_ptr or reg_tmp
+    * may be used in ref.
+    */
+   ok = drutil_insert_get_mem_addr(drcontext, ilist, where, ref, reg_tmp, reg_ptr);
+   DR_ASSERT(ok);
+   drx_buf_insert_load_buf_ptr(drcontext, trace_buffer, ilist, where, reg_ptr);
+   /* inserts memref addr */
 
-    drx_buf_insert_buf_store(drcontext, trace_buffer, ilist, where, reg_ptr, DR_REG_NULL,
-                             opnd_create_reg(reg_tmp), OPSZ_PTR,
-                             offsetof(mem_ref_t, addr));
+   drx_buf_insert_buf_store(drcontext, trace_buffer, ilist, where, reg_ptr, DR_REG_NULL,
+                            opnd_create_reg(reg_tmp), OPSZ_PTR,
+                            offsetof(mem_ref_t, addr));
 
 
 
-    //opnd_t source1 = instr_get_src(instr_operands,1);
-    //opnd_t dest = instr_get_dst(instr_operands,0);
-    instr_t *instr = instrlist_first(ilist);
-    app_pc pc_l = instr_get_app_pc(instr);
+   //opnd_t source1 = instr_get_src(instr_operands,1);
+   //opnd_t dest = instr_get_dst(instr_operands,0);
+   instr_t *instr = instrlist_first(ilist);
+   app_pc pc_l = instr_get_app_pc(instr);
 
-    opnd_t opnd = instr_get_src(instr,0);
-    uint size_of_mem_ref = drutil_opnd_mem_size_in_bytes(opnd, instr);
+   opnd_t opnd = instr_get_src(instr,0);
+   uint size_of_mem_ref = drutil_opnd_mem_size_in_bytes(opnd, instr);
 
-    dr_insert_clean_call(drcontext,ilist,where,(void *)catch_mem_ref, false, 3,
-                         opnd_create_reg(reg_tmp),
-                         OPND_CREATE_INTPTR(pc_l),
-                         OPND_CREATE_INT64(size_of_mem_ref)
-                         );
-    if (IF_AARCHXX_ELSE(true, false)) {
-        /* At this point we save the write address for later, because reg_tmp's value
-         * will get clobbered on ARM.
-         */
-        if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_addr) !=
-            DRREG_SUCCESS) {
-            DR_ASSERT(false);
-            return DR_REG_NULL;
-        }
-        MINSERT(ilist, where,
-                XINST_CREATE_move(drcontext, opnd_create_reg(reg_addr),
-                                  opnd_create_reg(reg_tmp)));
-    }
-    /* Inserts type. */
-    type = (ushort)opcode;
-    drx_buf_insert_buf_store(drcontext, trace_buffer, ilist, where, reg_ptr, reg_tmp,
-                             OPND_CREATE_INT16(type), OPSZ_2, offsetof(mem_ref_t, type));
-    /* Inserts size. */
-    size = (ushort)drutil_opnd_mem_size_in_bytes(ref, instr_operands);
-    drx_buf_insert_buf_store(drcontext, trace_buffer, ilist, where, reg_ptr, reg_tmp,
-                             OPND_CREATE_INT16(size), OPSZ_2, offsetof(mem_ref_t, size));
-    /* If the app write segfaults, we will be unable to write to the write_buffer, which
-     * means the above trace_buffer entries won't have a corresponding entry in the
-     * write_buffer. To mitigate this scenario, we postpone updating trace_buffer ptr to
-     * the post-write instrumentation. This way, if the app write fails for any reason,
-     * the trace_buffer entry will not be committed.
-     */
+   dr_insert_clean_call(drcontext,ilist,where,(void *)catch_mem_ref, false, 3,
+                        opnd_create_reg(reg_tmp),
+                        OPND_CREATE_INTPTR(pc_l),
+                        OPND_CREATE_INT64(size_of_mem_ref)
+   );
+   if (IF_AARCHXX_ELSE(true, false)) {
+       /* At this point we save the write address for later, because reg_tmp's value
+        * will get clobbered on ARM.
+        */
+       if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_addr) !=
+           DRREG_SUCCESS) {
+           DR_ASSERT(false);
+           return DR_REG_NULL;
+       }
+       MINSERT(ilist, where,
+               XINST_CREATE_move(drcontext, opnd_create_reg(reg_addr),
+                                 opnd_create_reg(reg_tmp)));
+   }
+   /* Inserts type. */
+   type = (ushort)opcode;
+   drx_buf_insert_buf_store(drcontext, trace_buffer, ilist, where, reg_ptr, reg_tmp,
+                            OPND_CREATE_INT16(type), OPSZ_2, offsetof(mem_ref_t, type));
+   /* Inserts size. */
+   size = (ushort)drutil_opnd_mem_size_in_bytes(ref, instr_operands);
+   drx_buf_insert_buf_store(drcontext, trace_buffer, ilist, where, reg_ptr, reg_tmp,
+                            OPND_CREATE_INT16(size), OPSZ_2, offsetof(mem_ref_t, size));
+   /* If the app write segfaults, we will be unable to write to the write_buffer, which
+    * means the above trace_buffer entries won't have a corresponding entry in the
+    * write_buffer. To mitigate this scenario, we postpone updating trace_buffer ptr to
+    * the post-write instrumentation. This way, if the app write fails for any reason,
+    * the trace_buffer entry will not be committed.
+    */
 
-    if (instr_is_call(instr_operands)) {
-        app_pc pc;
+   if (instr_is_call(instr_operands)) {
+       app_pc pc;
 
-        /* Note that on ARM the call instruction writes only to the link register, so
-         * we would never even get into instrument_pre_write() on ARM if this was a call.
-         */
-        IF_AARCHXX(DR_ASSERT(false));
-        /* We simulate the call instruction's written memory by writing the next app_pc
-         * to the written buffer, since we can't do this after the call has happened.
-         */
-        drx_buf_insert_load_buf_ptr(drcontext, write_buffer, ilist, where, reg_ptr);
-        pc = decode_next_pc(drcontext, instr_get_app_pc(instr_operands));
-        /* note that for a circular buffer, we don't need to specify a scratch register */
-        drx_buf_insert_buf_store(drcontext, trace_buffer, ilist, where, reg_ptr,
-                                 DR_REG_NULL, OPND_CREATE_INTPTR((ptr_int_t)pc), OPSZ_PTR,
-                                 0);
-        drx_buf_insert_update_buf_ptr(drcontext, write_buffer, ilist, where, reg_ptr,
-                                      reg_tmp, sizeof(app_pc));
-        /* we don't need to persist reg_tmp to the next instruction */
-        if (drreg_unreserve_register(drcontext, ilist, where, reg_tmp) != DRREG_SUCCESS)
-            DR_ASSERT(false);
-        reg_tmp = DR_REG_NULL;
-    } else if (IF_AARCHXX_ELSE(true, false)) {
-        /* Now reg_tmp has the address of the write again. */
-        MINSERT(ilist, where,
-                XINST_CREATE_move(drcontext, opnd_create_reg(reg_tmp),
-                                  opnd_create_reg(reg_addr)));
-        if (drreg_unreserve_register(drcontext, ilist, where, reg_addr) != DRREG_SUCCESS)
-            DR_ASSERT(false);
-    }
-    if (drreg_unreserve_register(drcontext, ilist, where, reg_ptr) != DRREG_SUCCESS)
-        DR_ASSERT(false);
-    return reg_tmp;
+       /* Note that on ARM the call instruction writes only to the link register, so
+        * we would never even get into instrument_pre_write() on ARM if this was a call.
+        */
+       IF_AARCHXX(DR_ASSERT(false));
+       /* We simulate the call instruction's written memory by writing the next app_pc
+        * to the written buffer, since we can't do this after the call has happened.
+        */
+       drx_buf_insert_load_buf_ptr(drcontext, write_buffer, ilist, where, reg_ptr);
+       pc = decode_next_pc(drcontext, instr_get_app_pc(instr_operands));
+       /* note that for a circular buffer, we don't need to specify a scratch register */
+       drx_buf_insert_buf_store(drcontext, trace_buffer, ilist, where, reg_ptr,
+                                DR_REG_NULL, OPND_CREATE_INTPTR((ptr_int_t)pc), OPSZ_PTR,
+                                0);
+       drx_buf_insert_update_buf_ptr(drcontext, write_buffer, ilist, where, reg_ptr,
+                                     reg_tmp, sizeof(app_pc));
+       /* we don't need to persist reg_tmp to the next instruction */
+       if (drreg_unreserve_register(drcontext, ilist, where, reg_tmp) != DRREG_SUCCESS)
+           DR_ASSERT(false);
+       reg_tmp = DR_REG_NULL;
+   } else if (IF_AARCHXX_ELSE(true, false)) {
+       /* Now reg_tmp has the address of the write again. */
+       MINSERT(ilist, where,
+               XINST_CREATE_move(drcontext, opnd_create_reg(reg_tmp),
+                                 opnd_create_reg(reg_addr)));
+       if (drreg_unreserve_register(drcontext, ilist, where, reg_addr) != DRREG_SUCCESS)
+           DR_ASSERT(false);
+   }
+   if (drreg_unreserve_register(drcontext, ilist, where, reg_ptr) != DRREG_SUCCESS)
+       DR_ASSERT(false);
+   return reg_tmp;
 }
 
 static void
 instrument_post_write(void *drcontext, instrlist_t *ilist, instr_t *where, opnd_t memref,
-                      instr_t *write, reg_id_t reg_addr)
+                     instr_t *write, reg_id_t reg_addr)
 {
-    reg_id_t reg_ptr;
-    ushort stride = (ushort)drutil_opnd_mem_size_in_bytes(memref, write);
-
-    /* We want to use the same predicate as write when inserting the following
-     * instrumentation.
-     */
-    instrlist_set_auto_predicate(ilist, instr_get_predicate(write));
-
-    if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_ptr) !=
-        DRREG_SUCCESS) {
-        DR_ASSERT(false);
-        return;
+    /**
+    if(pmem_op){
+        pmemobj_tx_commit();
+        perror("Commiting transaction \n");
+    } else{
+        //perror("Not a pmem op \n");
     }
+     **/
 
-    drx_buf_insert_load_buf_ptr(drcontext, write_buffer, ilist, where, reg_ptr);
-    /* drx_buf_insert_buf_memcpy() internally updates the buffer pointer */
-    drx_buf_insert_buf_memcpy(drcontext, write_buffer, ilist, where, reg_ptr, reg_addr,
-                              stride);
+   reg_id_t reg_ptr;
+   ushort stride = (ushort)drutil_opnd_mem_size_in_bytes(memref, write);
 
-    /* Data was written to trace_buffer in instrument_pre_write. Here, by updating
-     * the trace_buffer ptr, we essentially commit that data. See comment in
-     * instrument_pre_write for more details.
-     * XXX: This extra overhead of loading trace_buffer ptr in the common path can
-     * be avoided by handling the app-write-fail case in a fault handler instead.
-     */
-    drx_buf_insert_load_buf_ptr(drcontext, trace_buffer, ilist, where, reg_ptr);
-    drx_buf_insert_update_buf_ptr(drcontext, trace_buffer, ilist, where, reg_ptr,
-                                  DR_REG_NULL, sizeof(mem_ref_t));
+   /* We want to use the same predicate as write when inserting the following
+    * instrumentation.
+    */
+   instrlist_set_auto_predicate(ilist, instr_get_predicate(write));
 
-    if (drreg_unreserve_register(drcontext, ilist, where, reg_ptr) != DRREG_SUCCESS)
-        DR_ASSERT(false);
-    if (drreg_unreserve_register(drcontext, ilist, where, reg_addr) != DRREG_SUCCESS)
-        DR_ASSERT(false);
+   if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_ptr) !=
+       DRREG_SUCCESS) {
+       DR_ASSERT(false);
+       return;
+   }
 
-    /* Set the predicate back to the default */
-    instrlist_set_auto_predicate(ilist, instr_get_predicate(where));
+   drx_buf_insert_load_buf_ptr(drcontext, write_buffer, ilist, where, reg_ptr);
+   /* drx_buf_insert_buf_memcpy() internally updates the buffer pointer */
+   drx_buf_insert_buf_memcpy(drcontext, write_buffer, ilist, where, reg_ptr, reg_addr,
+                             stride);
+
+   /* Data was written to trace_buffer in instrument_pre_write. Here, by updating
+    * the trace_buffer ptr, we essentially commit that data. See comment in
+    * instrument_pre_write for more details.
+    * XXX: This extra overhead of loading trace_buffer ptr in the common path can
+    * be avoided by handling the app-write-fail case in a fault handler instead.
+    */
+   drx_buf_insert_load_buf_ptr(drcontext, trace_buffer, ilist, where, reg_ptr);
+   drx_buf_insert_update_buf_ptr(drcontext, trace_buffer, ilist, where, reg_ptr,
+                                 DR_REG_NULL, sizeof(mem_ref_t));
+
+   if (drreg_unreserve_register(drcontext, ilist, where, reg_ptr) != DRREG_SUCCESS)
+       DR_ASSERT(false);
+   if (drreg_unreserve_register(drcontext, ilist, where, reg_addr) != DRREG_SUCCESS)
+       DR_ASSERT(false);
+
+   /* Set the predicate back to the default */
+   instrlist_set_auto_predicate(ilist, instr_get_predicate(where));
 }
 
 static void
 handle_post_write(void *drcontext, instrlist_t *ilist, instr_t *where, reg_id_t reg_addr)
 {
-    int i;
-    instr_t *prev_instr = instr_get_prev_app(where);
-    bool seen_memref = false;
+   int i;
+   instr_t *prev_instr = instr_get_prev_app(where);
+   bool seen_memref = false;
 
-    /* XXX: We assume that no write instruction has multiple distinct memory destinations.
-     * This way we are able to persist a single register across an app instruction. Note
-     * there are instructions which currently do break this assumption, but we punt on
-     * this.
-     */
-    for (i = 0; i < instr_num_dsts(prev_instr); ++i) {
-        if (opnd_is_memory_reference(instr_get_dst(prev_instr, i))) {
-            if (seen_memref) {
-                DR_ASSERT_MSG(false, "Found inst with multiple memory destinations");
-                break;
-            }
-            seen_memref = true;
-            instrument_post_write(drcontext, ilist, where, instr_get_dst(prev_instr, i),
-                                  prev_instr, reg_addr);
-        }
-    }
+   /* XXX: We assume that no write instruction has multiple distinct memory destinations.
+    * This way we are able to persist a single register across an app instruction. Note
+    * there are instructions which currently do break this assumption, but we punt on
+    * this.
+    */
+   for (i = 0; i < instr_num_dsts(prev_instr); ++i) {
+       if (opnd_is_memory_reference(instr_get_dst(prev_instr, i))) {
+           if (seen_memref) {
+               DR_ASSERT_MSG(false, "Found inst with multiple memory destinations");
+               break;
+           }
+           seen_memref = true;
+           instrument_post_write(drcontext, ilist, where, instr_get_dst(prev_instr, i),
+                                 prev_instr, reg_addr);
+       }
+   }
 }
 
 static dr_emit_flags_t
 event_app_analysis(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
-                   bool translating, void **user_data)
+                  bool translating, void **user_data)
 {
-    instru_data_t *data = (instru_data_t *)dr_thread_alloc(drcontext, sizeof(*data));
-    data->reg_addr = DR_REG_NULL;
-    data->last_opcode = OP_INVALID;
-    *user_data = (void *)data;
-    return DR_EMIT_DEFAULT;
+   instru_data_t *data = (instru_data_t *)dr_thread_alloc(drcontext, sizeof(*data));
+   data->reg_addr = DR_REG_NULL;
+   data->last_opcode = OP_INVALID;
+   *user_data = (void *)data;
+   return DR_EMIT_DEFAULT;
 }
 
 /* For each memory reference app instr, we insert inline code to fill the buffer
- * with an instruction entry and memory reference entries.
- */
+* with an instruction entry and memory reference entries.
+*/
 static dr_emit_flags_t
 event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *where,
-                      bool for_trace, bool translating, void *user_data)
+                     bool for_trace, bool translating, void *user_data)
 {
-    int i;
-    bool seen_memref = false;
-    instru_data_t *data = (instru_data_t *)user_data;
+   int i;
+   bool seen_memref = false;
+   instru_data_t *data = (instru_data_t *)user_data;
 
-    /* If the previous instruction was a write, we should handle it. */
-    if (data->reg_addr != DR_REG_NULL)
-        handle_post_write(drcontext, bb, where, data->reg_addr);
-    data->reg_addr = DR_REG_NULL;
+   /* If the previous instruction was a write, we should handle it. */
+   if (data->reg_addr != DR_REG_NULL)
+       handle_post_write(drcontext, bb, where, data->reg_addr);
+   data->reg_addr = DR_REG_NULL;
 
-    /* Use the drmgr_orig_app_instr_* interface to properly handle our own use
-     * of drutil_expand_rep_string() and drx_expand_scatter_gather() (as well
-     * as another client/library emulating the instruction stream).
-     */
-    instr_t *instr_fetch = drmgr_orig_app_instr_for_fetch(drcontext);
-    if (instr_fetch != NULL)
-        data->last_opcode = instr_get_opcode(instr_fetch);
+   /* Use the drmgr_orig_app_instr_* interface to properly handle our own use
+    * of drutil_expand_rep_string() and drx_expand_scatter_gather() (as well
+    * as another client/library emulating the instruction stream).
+    */
+   instr_t *instr_fetch = drmgr_orig_app_instr_for_fetch(drcontext);
+   if (instr_fetch != NULL)
+       data->last_opcode = instr_get_opcode(instr_fetch);
 
-    instr_t *instr_operands = drmgr_orig_app_instr_for_operands(drcontext);
-    if (instr_operands != NULL && instr_writes_memory(instr_operands)) {
-        DR_ASSERT(instr_is_app(instr_operands));
-        DR_ASSERT(data->last_opcode != 0);
-        /* XXX: See above, in handle_post_write(). To simplify the handling of registers,
-         * we assume no instruction has multiple distinct memory destination operands.
-         */
-        for (i = 0; i < instr_num_dsts(instr_operands); ++i) {
-            if (opnd_is_memory_reference(instr_get_dst(instr_operands, i))) {
-                if (seen_memref) {
-                    DR_ASSERT_MSG(false, "Found inst with multiple memory destinations");
-                    break;
-                }
-                data->reg_addr = instrument_pre_write(drcontext, bb, where,
-                                                      data->last_opcode, instr_operands,
-                                                      instr_get_dst(instr_operands, i));
-                seen_memref = true;
-            }
-        }
-    }
+   instr_t *instr_operands = drmgr_orig_app_instr_for_operands(drcontext);
+   if (instr_operands != NULL && instr_writes_memory(instr_operands)) {
+       DR_ASSERT(instr_is_app(instr_operands));
+       DR_ASSERT(data->last_opcode != 0);
+       /* XXX: See above, in handle_post_write(). To simplify the handling of registers,
+        * we assume no instruction has multiple distinct memory destination operands.
+        */
+       for (i = 0; i < instr_num_dsts(instr_operands); ++i) {
+           if (opnd_is_memory_reference(instr_get_dst(instr_operands, i))) {
+               if (seen_memref) {
+                   DR_ASSERT_MSG(false, "Found inst with multiple memory destinations");
+                   break;
+               }
+               data->reg_addr = instrument_pre_write(drcontext, bb, where,
+                                                     data->last_opcode, instr_operands,
+                                                     instr_get_dst(instr_operands, i));
+               seen_memref = true;
+           }
+       }
+   }
 
-    if (drmgr_is_last_instr(drcontext, where))
-        dr_thread_free(drcontext, data, sizeof(*data));
-    return DR_EMIT_DEFAULT;
+   if (drmgr_is_last_instr(drcontext, where))
+       dr_thread_free(drcontext, data, sizeof(*data));
+   return DR_EMIT_DEFAULT;
 }
 
 /* We transform string loops into regular loops so we can more easily
- * monitor every memory reference they make.
- */
+* monitor every memory reference they make.
+*/
 static dr_emit_flags_t
 event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
-                 bool translating)
+                bool translating)
 {
-    if (!drutil_expand_rep_string(drcontext, bb)) {
-        DR_ASSERT(false);
-        /* in release build, carry on: we'll just miss per-iter refs */
-    }
-    if (!drx_expand_scatter_gather(drcontext, bb, NULL)) {
-        DR_ASSERT(false);
-    }
-    drx_tail_pad_block(drcontext, bb);
-    return DR_EMIT_DEFAULT;
+   if (!drutil_expand_rep_string(drcontext, bb)) {
+       DR_ASSERT(false);
+       /* in release build, carry on: we'll just miss per-iter refs */
+   }
+   if (!drx_expand_scatter_gather(drcontext, bb, NULL)) {
+       DR_ASSERT(false);
+   }
+   drx_tail_pad_block(drcontext, bb);
+   return DR_EMIT_DEFAULT;
 }
 
 
@@ -658,53 +712,53 @@ event_thread_init(void *drcontext)
 {
 
 
-    per_thread_t *data = dr_thread_alloc(drcontext, sizeof(per_thread_t));
-    perror("Allocated threads");
-    DR_ASSERT(data != NULL);
-    drmgr_set_tls_field(drcontext, tls_idx, data);
+   per_thread_t *data = dr_thread_alloc(drcontext, sizeof(per_thread_t));
+   perror("Allocated threads");
+   DR_ASSERT(data != NULL);
+   drmgr_set_tls_field(drcontext, tls_idx, data);
 
-    /* We're going to dump our data to a per-thread file.
-     * On Windows we need an absolute path so we place it in
-     * the same directory as our library. We could also pass
-     * in a path as a client argument.
-     */
-    data->log =
-        log_file_open(client_id, drcontext, NULL /* using client lib path */, "memval",
+   /* We're going to dump our data to a per-thread file.
+    * On Windows we need an absolute path so we place it in
+    * the same directory as our library. We could also pass
+    * in a path as a client argument.
+    */
+   data->log =
+       log_file_open(client_id, drcontext, NULL /* using client lib path */, "memval",
 #ifndef WINDOWS
-                      DR_FILE_CLOSE_ON_FORK |
+                     DR_FILE_CLOSE_ON_FORK |
 #endif
-                          DR_FILE_ALLOW_LARGE);
-    data->logf = log_stream_from_file(data->log);
+                         DR_FILE_ALLOW_LARGE);
+   data->logf = log_stream_from_file(data->log);
 
 
 
-    perror("Finished thread init");
+   perror("Finished thread init");
 }
 
 static void
 event_thread_exit(void *drcontext)
 {
-    per_thread_t *data = drmgr_get_tls_field(drcontext, tls_idx);
-    log_stream_close(data->logf);
-    dr_thread_free(drcontext, data, sizeof(per_thread_t));
+   per_thread_t *data = drmgr_get_tls_field(drcontext, tls_idx);
+   log_stream_close(data->logf);
+   dr_thread_free(drcontext, data, sizeof(per_thread_t));
 }
 
 static void
 event_exit(void)
 {
-    if (!drmgr_unregister_tls_field(tls_idx) ||
-        !drmgr_unregister_thread_init_event(event_thread_init) ||
-        !drmgr_unregister_thread_exit_event(event_thread_exit) ||
-        !drmgr_unregister_bb_app2app_event(event_bb_app2app) ||
-        !drmgr_unregister_bb_insertion_event(event_app_instruction))
-        DR_ASSERT(false);
+   if (!drmgr_unregister_tls_field(tls_idx) ||
+       !drmgr_unregister_thread_init_event(event_thread_init) ||
+       !drmgr_unregister_thread_exit_event(event_thread_exit) ||
+       !drmgr_unregister_bb_app2app_event(event_bb_app2app) ||
+       !drmgr_unregister_bb_insertion_event(event_app_instruction))
+       DR_ASSERT(false);
 
-    drx_buf_free(write_buffer);
-    drx_buf_free(trace_buffer);
-    drutil_exit();
-    drreg_exit();
-    drmgr_exit();
-    drx_exit();
+   drx_buf_free(write_buffer);
+   drx_buf_free(trace_buffer);
+   drutil_exit();
+   drreg_exit();
+   drmgr_exit();
+   drx_exit();
 }
 
 
@@ -714,35 +768,35 @@ event_exit(void)
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
-    drreg_options_t ops = { sizeof(ops), 4 /*max slots needed*/, false };
-    dr_set_client_name("DynamoRIO Sample Client 'memval'", "http://dynamorio.org/issues");
-    drwrap_init();
-    if (!drmgr_init() || !drutil_init() || !drx_init() )
-        DR_ASSERT(false);
-    if (drreg_init(&ops) != DRREG_SUCCESS)
-        DR_ASSERT(false);
+   drreg_options_t ops = { sizeof(ops), 4 /*max slots needed*/, false };
+   dr_set_client_name("DynamoRIO Sample Client 'memval'", "http://dynamorio.org/issues");
+   drwrap_init();
+   if (!drmgr_init() || !drutil_init() || !drx_init() )
+       DR_ASSERT(false);
+   if (drreg_init(&ops) != DRREG_SUCCESS)
+       DR_ASSERT(false);
 
 
-    /* register events */
-    dr_register_exit_event(event_exit);
-    //
-    if (!drmgr_register_module_load_event(module_load_event) ||
-        !drmgr_register_thread_init_event(event_thread_init) ||
-        !drmgr_register_thread_exit_event(event_thread_exit) ||
-        !drmgr_register_bb_app2app_event(event_bb_app2app, NULL) ||
-        !drmgr_register_bb_instrumentation_event(event_app_analysis,
-                                                 event_app_instruction, NULL))
-        DR_ASSERT(false);
-    client_id = id;
-perror("registered");
-    tls_idx = drmgr_register_tls_field();
-    trace_buffer = drx_buf_create_trace_buffer(MEM_BUF_SIZE, trace_fault);
-    /* We could make this a trace buffer and specially handle faults, but it is not yet
-     * worth the effort.
-     */
-    write_buffer = drx_buf_create_circular_buffer(WRT_BUF_SIZE);
-    DR_ASSERT(tls_idx != -1 && trace_buffer != NULL && write_buffer != NULL);
+   /* register events */
+   dr_register_exit_event(event_exit);
+   //
+   if (!drmgr_register_module_load_event(module_load_event) ||
+       !drmgr_register_thread_init_event(event_thread_init) ||
+       !drmgr_register_thread_exit_event(event_thread_exit) ||
+       !drmgr_register_bb_app2app_event(event_bb_app2app, NULL) ||
+       !drmgr_register_bb_instrumentation_event(event_app_analysis,
+                                                event_app_instruction, NULL))
+       DR_ASSERT(false);
+   client_id = id;
+   perror("registered");
+   tls_idx = drmgr_register_tls_field();
+   trace_buffer = drx_buf_create_trace_buffer(MEM_BUF_SIZE, trace_fault);
+   /* We could make this a trace buffer and specially handle faults, but it is not yet
+    * worth the effort.
+    */
+   write_buffer = drx_buf_create_circular_buffer(WRT_BUF_SIZE);
+   DR_ASSERT(tls_idx != -1 && trace_buffer != NULL && write_buffer != NULL);
 
-    /* make it easy to tell, by looking at log file, which client executed */
-    dr_log(NULL, DR_LOG_ALL, 1, "Client 'memval' initializing\n");
+   /* make it easy to tell, by looking at log file, which client executed */
+   dr_log(NULL, DR_LOG_ALL, 1, "Client 'memval' initializing\n");
 }
