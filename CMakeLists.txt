@@ -249,8 +249,8 @@ set_target_properties(pmem PROPERTIES INTERFACE_INCLUDE_DIRECTORIES /usr/local/i
 #set_target_properties(pthread PROPERTIES IMPORTED_LOCATION /usr/lib/x86_64-linux-gnu/libpthread.a)
 #set_target_properties(pthread PROPERTIES INTERFACE_INCLUDE_DIRECTORIES /usr/include )
 
-add_sample_client(wrap        "wrap.c"          "drmgr;drreg;drutil;drx;drwrap;pmemobj;pthread;daxctl;ndctl;udev;uuid;kmod;dl;pmem")
-add_sample_client(memval_simple   "memval_simple.c;utils.c"   "drmgr;drreg;drutil;drx;drwrap;pmemobj;pthread;daxctl;ndctl;udev;uuid;kmod;dl;pmem")
+add_sample_client(wrap        "wrap.c"          "drmgr;drreg;drutil;drx;drwrap;pmemobj;pthread;daxctl;ndctl;udev;uuid;kmod;dl;pmem;drsyms")
+add_sample_client(memval_simple   "memval_simple.c;utils.c"   "drmgr;drreg;drutil;drx;drwrap;pmemobj;pthread;daxctl;ndctl;udev;uuid;kmod;dl;pmem;drsyms")
 
 
 add_sample_client(instrace_simple "instrace_simple.c;utils.c" "drmgr;drreg;drx")

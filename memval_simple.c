@@ -67,6 +67,7 @@
 #include "drreg.h"
 #include "utils.h"
 #include "drx.h"
+#include "drsyms.h"
 
 /**
 * Merged code
@@ -116,6 +117,12 @@ bool file_exists(const char *path){
    return access(path, F_OK) != 0;
 }
 
+static void
+wrap_pre_tx_start(void *wrapcxt, OUT void **user_data);
+
+static void
+wrap_pre_tx_finish(void *wrapcxt, OUT void **user_data);
+
 struct my_root {
    //PMEMmutex lock;
    char this_is_on_pmem[2021];
@@ -142,6 +149,30 @@ static bool file_was_created = false;
 static void
 module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
 {
+    /////
+    //app_pc txhandler_start = (app_pc)dr_get_proc_address(mod->handle, "main");
+    //app_pc txhandler_end = (app_pc)dr_get_proc_address(mod->handle, "sm_op_end");
+    const char *func_name = "sm_op_begin";
+    app_pc orig;
+    size_t offs;
+
+    if (drsym_lookup_symbol(mod->full_path, func_name, &offs, DRSYM_DEMANGLE) == DRSYM_SUCCESS) {
+        orig = offs + mod->start;
+        dr_printf("function \"%s\" is found..\n", func_name);
+        bool wrapped = drwrap_wrap(orig, wrap_pre_tx_start, NULL);
+        if (wrapped) { dr_printf("function \"%s\" is wrapped..\n", func_name); }
+    }
+
+    func_name = "sm_op_end";
+
+
+    if (drsym_lookup_symbol(mod->full_path, func_name, &offs, DRSYM_DEMANGLE) == DRSYM_SUCCESS) {
+        orig = offs + mod->start;
+        dr_printf("function \"%s\" is found..\n", func_name);
+        bool wrapped = drwrap_wrap(orig, wrap_pre_tx_finish, NULL);
+        if (wrapped) { dr_printf("function \"%s\" is wrapped..\n", func_name); }
+    }
+    ////
    if(!file_was_created) {
        file_was_created = true;
        const char *path_to_pmem = "/mnt/dax/test_outputs/wrap_pmem_file_0";
@@ -211,6 +242,22 @@ module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
 
 
 static void
+wrap_pre_tx_start(void *wrapcxt, OUT void **user_data){
+    perror("SM op begin INSTR \n");
+    perror("Starting a new transaction \n");
+    pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
+                     TX_PARAM_NONE);
+}
+static void
+wrap_pre_tx_finish(void *wrapcxt, OUT void **user_data){
+    perror("Commiting transaction! \n");
+    pmemobj_tx_commit();
+    perror("Ending transaction! \n");
+    pmemobj_tx_end();
+    perror("SM tx finish INSTR \n");
+}
+
+static void
 wrap_pre(void *wrapcxt, OUT void **user_data)
 {
 
@@ -245,18 +292,13 @@ wrap_post(void *wrapcxt, void *user_data)
 
        if(!first_entry){
            //wrap_tx_counter++;
-           perror("Commiting transaction! \n");
-           pmemobj_tx_commit();
-           perror("Ending transaction! \n");
-           pmemobj_tx_end();
+
 
        } else {
            first_entry = false;
            //wrap_tx_counter++;
        }
-       perror("Starting a new transaction \n");
-       pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
-                        TX_PARAM_NONE);
+
 
        //Looks like only one transaction can be excuted and commited
        //pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
@@ -759,6 +801,7 @@ event_exit(void)
    drreg_exit();
    drmgr_exit();
    drx_exit();
+   drsym_exit();
 }
 
 
@@ -771,6 +814,7 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
    drreg_options_t ops = { sizeof(ops), 4 /*max slots needed*/, false };
    dr_set_client_name("DynamoRIO Sample Client 'memval'", "http://dynamorio.org/issues");
    drwrap_init();
+   drsym_init(0);
    if (!drmgr_init() || !drutil_init() || !drx_init() )
        DR_ASSERT(false);
    if (drreg_init(&ops) != DRREG_SUCCESS)
