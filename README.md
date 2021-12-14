@@ -1,9 +1,11 @@
 # To use
 
-Replace:
-/dynamorio/api/samples/memval_simple.c
-/dynamorio/api/samples/CMakeLists.txt
+Replace: <br>
+/dynamorio/api/samples/memval_simple.c <br>
+/dynamorio/api/samples/CMakeLists.txt <br>
+/dynamorio/api/samples/wrap.c <br>
 
-with:
-CMakeLists.txt
-memval_simple.c
+with: <br>
+CMakeLists.txt <br>
+memval_simple.c <br>
+wrap.c
