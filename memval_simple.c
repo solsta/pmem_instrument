@@ -57,10 +57,6 @@
 * without instrumentation optimization.
 */
 
-
-
-#include <stddef.h> /* for offsetof */
-#include <string.h>
 #include "dr_api.h"
 #include "drmgr.h"
 #include "drutil.h"
@@ -68,19 +64,18 @@
 #include "utils.h"
 #include "drx.h"
 #include "drsyms.h"
+#include "drwrap.h"
 
-/**
-* Merged code
-*/
-#include <unistd.h>
 #include <libpmemobj/base.h>
 #include <libpmemobj/pool_base.h>
 #include <libpmemobj/types.h>
-
 #include <libpmemobj/tx_base.h>
-#include <libpmemobj/tx.h>
+#include <stddef.h> /* for offsetof */
+#include <string.h>
+#include <unistd.h>
 
-#include "drwrap.h"
+
+
 
 #ifdef WINDOWS
 #    define IF_WINDOWS_ELSE(x, y) x
@@ -94,6 +89,8 @@
 #    define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
 #endif
 
+#define PMEM_AREA_SIZE 4096
+
 #define NULL_TERMINATE(buf) (buf)[(sizeof((buf)) / sizeof((buf)[0])) - 1] = '\0'
 
 static PMEMobjpool *pop;
@@ -105,11 +102,10 @@ wrap_pre(void *wrapcxt, OUT void **user_data);
 static void
 wrap_post(void *wrapcxt, void *user_data);
 
-static size_t max_malloc;
-#ifdef SHOW_RESULTS
-//static uint malloc_oom;
-#endif
-//static void *max_lock;
+static void
+wrap_pre_tx_start(void *wrapcxt, OUT void **user_data);
+static void
+wrap_pre_tx_finish(void *wrapcxt, OUT void **user_data);
 
 #define MALLOC_ROUTINE_NAME IF_WINDOWS_ELSE("HeapAlloc", "malloc")
 
@@ -117,17 +113,10 @@ bool file_exists(const char *path){
    return access(path, F_OK) != 0;
 }
 
-static void
-wrap_pre_tx_start(void *wrapcxt, OUT void **user_data);
-
-static void
-wrap_pre_tx_finish(void *wrapcxt, OUT void **user_data);
-
 struct my_root {
-   //PMEMmutex lock;
-   char this_is_on_pmem[2021];
+   char this_is_on_pmem[PMEM_AREA_SIZE];
 };
-
+/**
 static const char *desc[] = {
    "TX_STAGE_NONE",
    "TX_STAGE_WORK",
@@ -136,12 +125,13 @@ static const char *desc[] = {
    "TX_STAGE_FINALLY",
    "WTF?"
 };
+**/
 
 static void
 log_stages(PMEMobjpool *pop_local, enum pobj_tx_stage stage, void *arg)
 {
-   printf("cb stage: %s \n", desc[stage]);
-   //dr_fprintf(STDERR, "cb stage: ", desc[stage], " ");
+    /* Commenting this out because this is not required during normal execution. */
+    /* dr_fprintf(STDERR, "cb stage: ", desc[stage], " "); */
 }
 
 static bool file_was_created = false;
@@ -172,52 +162,24 @@ module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
         bool wrapped = drwrap_wrap(orig, wrap_pre_tx_finish, NULL);
         if (wrapped) { dr_printf("function \"%s\" is wrapped..\n", func_name); }
     }
-    ////
-   if(!file_was_created) {
-       file_was_created = true;
-       const char *path_to_pmem = "/mnt/dax/test_outputs/wrap_pmem_file_0";
+    /* This methos is called multiple times, but we only need to open the file once */
+    if(!file_was_created) {
+        file_was_created = true;
+        const char *path_to_pmem = "/mnt/dax/test_outputs/wrap_pmem_file_0";
 
-       if (file_exists((path_to_pmem)) != 0) {
-           perror("Creating a file");
-           if ((pop = pmemobj_create(path_to_pmem, POBJ_LAYOUT_NAME(list),
-                                     PMEMOBJ_MIN_POOL, 0666)) == NULL) {
-               perror("failed to create pool\n");
-           }
-       } else {
-           perror("Opening a file");
-           if ((pop = pmemobj_open(path_to_pmem, POBJ_LAYOUT_NAME(list))) == NULL) {
-               perror("failed to open pool\n");
-           }
-       }
-
-       perror("Creating root \n");
-       root = pmemobj_root(pop, sizeof(struct my_root));
-       perror("Root initialized \n");
-       rootp = pmemobj_direct(root);
-       perror("Rootp initialized \n");
-
-       /**
-       TX_BEGIN(pop){
-           pmemobj_tx_add_range(root, 0, 64);
-       } TX_END
-       **/
-       /**
-       pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
-                        TX_PARAM_NONE);
-       //Commit without begin results in a failure
-       pmemobj_tx_commit();
-**/
-       //pmemobj_tx_add_range(root, 0, 128);
-       pmemobj_memcpy_persist(pop, rootp->this_is_on_pmem, "Old Value", 10);
-       //pmemobj_tx_commit();
-       void *mem = rootp->this_is_on_pmem;
-       if(mem == NULL){
-           printf("Mem was null");
-       } else {
-           printf("Mem was not null");
-       }
-
-   }
+        if (file_exists((path_to_pmem)) != 0) {
+            if ((pop = pmemobj_create(path_to_pmem, POBJ_LAYOUT_NAME(list),
+                                      PMEMOBJ_MIN_POOL, 0666)) == NULL) {
+                perror("failed to create pool\n");
+            }
+        } else {
+            if ((pop = pmemobj_open(path_to_pmem, POBJ_LAYOUT_NAME(list))) == NULL) {
+                perror("failed to open pool\n");
+            }
+        }
+        root = pmemobj_root(pop, sizeof(struct my_root));
+        rootp = pmemobj_direct(root);
+    }
 
    app_pc towrap = (app_pc)dr_get_proc_address(mod->handle, MALLOC_ROUTINE_NAME);
    if (towrap != NULL) {
@@ -237,13 +199,11 @@ module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
        }
 #endif
    }
-   perror("Wrap is complere okay \n");
 }
 
 
 static void
 wrap_pre_tx_start(void *wrapcxt, OUT void **user_data){
-    perror("SM op begin INSTR \n");
     perror("Starting a new transaction \n");
     pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
                      TX_PARAM_NONE);
@@ -252,66 +212,30 @@ static void
 wrap_pre_tx_finish(void *wrapcxt, OUT void **user_data){
     perror("Commiting transaction! \n");
     pmemobj_tx_commit();
-    perror("Ending transaction! \n");
     pmemobj_tx_end();
-    perror("SM tx finish INSTR \n");
 }
 
 static void
 wrap_pre(void *wrapcxt, OUT void **user_data)
 {
-
    size_t sz = (size_t)drwrap_get_arg(wrapcxt, IF_WINDOWS_ELSE(2, 0));
-
-   if (sz > max_malloc) {
-
-       //dr_mutex_lock(max_lock);
-
-       if (sz > max_malloc)
-           max_malloc = sz;
-       //dr_mutex_unlock(max_lock);
-
-   }
    *user_data = (void *)sz;
-
 }
 
-static bool first_entry = true;
-//static int wrap_tx_counter = 0;
 static void
 wrap_post(void *wrapcxt, void *user_data)
 {
 
 #ifdef SHOW_RESULTS
    size_t sz = (size_t)user_data;
-   //if(sz == sizeof (int)){
-   if(sz == 2021){
-       /*
-        * If block looks to act correct, but crashes after
-        */
-
-       if(!first_entry){
-           //wrap_tx_counter++;
-
-
-       } else {
-           first_entry = false;
-           //wrap_tx_counter++;
-       }
-
-
-       //Looks like only one transaction can be excuted and commited
-       //pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
-       //                 TX_PARAM_NONE);
-       //sleep(1);
-       //
+   /** Condition to identify the target malloc
+    * This needs to be generalized to pick memory allocations that we are looking for.
+    **/
+   if(sz == PMEM_AREA_SIZE){
        drwrap_set_retval(wrapcxt, rootp->this_is_on_pmem);
    }
-
 #endif
 }
-
-/////////////////////////////
 
 /* We opt to use two buffers -- one to hold only mem_ref_t structs, and another to hold
 * the raw bytes written. This is done for simplicity, as we will never get a partial
@@ -412,51 +336,18 @@ trace_fault(void *drcontext, void *buf_base, size_t size)
                           drx_buf_get_buffer_base(drcontext, write_buffer));
 }
 
-//static int tx_flag = 0;
-static int pmem_op = false;
 static void catch_mem_ref(uintptr_t *addr, uintptr_t *pc, uint size);
 static void catch_mem_ref(uintptr_t *addr, uintptr_t *pc, uint size){
-   //Check if this is pmem refference and add to transaction
-   //printf("From catch mem ref %p %p \n", addr, pc);
    uintptr_t *start = (uintptr_t *)rootp->this_is_on_pmem;
    uintptr_t *finish = (uintptr_t *)rootp->this_is_on_pmem + 2021;
-   pmem_op = false;
+
+   /* Check if this operation is updating persistent memory */
    if(addr >= start && addr <=finish){
-
-       //pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
-       //                 TX_PARAM_NONE);
-
-       /*
-        * Flag this operation as pmem, so it can be commited post_write
-        */
-       printf("Spotted pmem! \n");
-       printf("From catch mem ref %p %u \n", addr, size);
-       pmem_op = true;
        perror("Adding to transaction \n");
        pmemobj_tx_add_range_direct(addr, 64);
-       /**
-       if(tx_flag == 0){
-           tx_flag = 1;
-           //pmemobj_tx_add_range(root, 0, 128); ]=-98uop[]
-
-
-       //Should work without a flag because tx is started everytime there is a call to malloc(2021)
-           pmemobj_tx_add_range_direct(addr, 64);
-           //This happens more often then tx_begin
-           pmemobj_tx_commit();
-       }
-        **/
-       //pmemobj_tx_commit();
-
-       //pmemobj_memcpy_persist(pop, rootp->this_is_on_pmem, "Old Value", 10);
-       //pmemobj_tx_commit();
-
-
    }
-
-   //printf("From catch mem ref %s %p \n", (char *)addr, pc);
 }
-//FOO BAR random words here!
+
 static reg_id_t
 instrument_pre_write(void *drcontext, instrlist_t *ilist, instr_t *where, int opcode,
                     instr_t *instr_operands, opnd_t ref)
@@ -464,12 +355,6 @@ instrument_pre_write(void *drcontext, instrlist_t *ilist, instr_t *where, int op
    reg_id_t reg_ptr, reg_tmp, reg_addr;
    ushort type, size;
    bool ok;
-
-   //instr_t *instr = instrlist_first(ilist);
-
-   //printf("OPND INSTR %p \n",  (instr_get_dst(instr,0)));
-
-   //fprintf(STDERR, "where: %s", where, "\n");
 
    if (drreg_reserve_register(drcontext, ilist, where, NULL, &reg_tmp) !=
        DRREG_SUCCESS) {
@@ -481,10 +366,6 @@ instrument_pre_write(void *drcontext, instrlist_t *ilist, instr_t *where, int op
        DR_ASSERT(false);
        return DR_REG_NULL;
    }
-
-   //app_pc addr = instr_get_app_pc(instr_operands);
-
-   //printf("APP_PC: %p \n", addr);
 
    /* i#2449: In the situation that instrument_post_write, instrument_pre_write and ref
     * all have the same register reserved, drutil_insert_get_mem_addr will compute the
@@ -514,10 +395,6 @@ instrument_pre_write(void *drcontext, instrlist_t *ilist, instr_t *where, int op
                             opnd_create_reg(reg_tmp), OPSZ_PTR,
                             offsetof(mem_ref_t, addr));
 
-
-
-   //opnd_t source1 = instr_get_src(instr_operands,1);
-   //opnd_t dest = instr_get_dst(instr_operands,0);
    instr_t *instr = instrlist_first(ilist);
    app_pc pc_l = instr_get_app_pc(instr);
 
@@ -596,15 +473,6 @@ static void
 instrument_post_write(void *drcontext, instrlist_t *ilist, instr_t *where, opnd_t memref,
                      instr_t *write, reg_id_t reg_addr)
 {
-    /**
-    if(pmem_op){
-        pmemobj_tx_commit();
-        perror("Commiting transaction \n");
-    } else{
-        //perror("Not a pmem op \n");
-    }
-     **/
-
    reg_id_t reg_ptr;
    ushort stride = (ushort)drutil_opnd_mem_size_in_bytes(memref, write);
 
@@ -752,10 +620,7 @@ event_bb_app2app(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
 static void
 event_thread_init(void *drcontext)
 {
-
-
    per_thread_t *data = dr_thread_alloc(drcontext, sizeof(per_thread_t));
-   perror("Allocated threads");
    DR_ASSERT(data != NULL);
    drmgr_set_tls_field(drcontext, tls_idx, data);
 
@@ -771,10 +636,6 @@ event_thread_init(void *drcontext)
 #endif
                          DR_FILE_ALLOW_LARGE);
    data->logf = log_stream_from_file(data->log);
-
-
-
-   perror("Finished thread init");
 }
 
 static void
@@ -804,26 +665,21 @@ event_exit(void)
    drsym_exit();
 }
 
-
-
-
-
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
    drreg_options_t ops = { sizeof(ops), 4 /*max slots needed*/, false };
    dr_set_client_name("DynamoRIO Sample Client 'memval'", "http://dynamorio.org/issues");
-   drwrap_init();
+   ;
    drsym_init(0);
-   if (!drmgr_init() || !drutil_init() || !drx_init() )
+   if (!drmgr_init() || !drutil_init() || !drx_init() || !drwrap_init())
        DR_ASSERT(false);
    if (drreg_init(&ops) != DRREG_SUCCESS)
        DR_ASSERT(false);
 
-
    /* register events */
    dr_register_exit_event(event_exit);
-   //
+
    if (!drmgr_register_module_load_event(module_load_event) ||
        !drmgr_register_thread_init_event(event_thread_init) ||
        !drmgr_register_thread_exit_event(event_thread_exit) ||
@@ -832,7 +688,6 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
                                                 event_app_instruction, NULL))
        DR_ASSERT(false);
    client_id = id;
-   perror("registered");
    tls_idx = drmgr_register_tls_field();
    trace_buffer = drx_buf_create_trace_buffer(MEM_BUF_SIZE, trace_fault);
    /* We could make this a trace buffer and specially handle faults, but it is not yet
