@@ -56,15 +56,20 @@
 * This client is a simple implementation of a memory reference tracing tool
 * without instrumentation optimization.
 */
-//#include <criu/criu.h>
+
 #include "dr_api.h"
 #include "drmgr.h"
+
 #include "drutil.h"
+
 #include "drreg.h"
+
 #include "utils.h"
 #include "drx.h"
 #include "drsyms.h"
 #include "drwrap.h"
+
+
 
 #include <libpmemobj/base.h>
 #include <libpmemobj/pool_base.h>
@@ -74,6 +79,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 
 //#include <fcntl.h>
 
@@ -114,6 +120,16 @@ wrap_pre_tx_start(void *wrapcxt, OUT void **user_data);
 static void
 wrap_pre_tx_finish(void *wrapcxt, OUT void **user_data);
 
+static void
+wrap_tx_start_criu(void *wrapcxt, OUT void **user_data);
+static void
+wrap_tx_finish_criu(void *wrapcxt, OUT void *user_data);
+
+static void
+wrap_tx_start(void *wrapcxt, OUT void **user_data);
+static void
+wrap_tx_finish(void *wrapcxt, OUT void *user_data);
+
 /* --- */
 //static void initislise(void);
 void create_unique_file_name(char *path_to_pmem);
@@ -128,7 +144,9 @@ bool file_exists(const char *path){
    return access(path, F_OK) != 0;
 }
 struct my_root {
-    long oofset;
+    bool tx_is_running;
+    int recovery_count;
+    long offset;
     char pmem_start[64000000];
 };
 /*
@@ -146,6 +164,13 @@ static const char *desc[] = {
    "WTF?"
 };
 **/
+
+bool verbose = true;
+void print_with_log_level(const char str[50]){
+    if(verbose){
+        printf("%s \n", str);
+    }
+}
 
 static void
 log_stages(PMEMobjpool *pop_local, enum pobj_tx_stage stage, void *arg)
@@ -165,9 +190,15 @@ module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
 
     if (drsym_lookup_symbol(mod->full_path, func_name, &offs, DRSYM_DEMANGLE) == DRSYM_SUCCESS) {
         orig = offs + mod->start;
-        dr_printf("function \"%s\" is found..\n", func_name);
+        if(verbose) {
+            dr_printf("function \"%s\" is found..\n", func_name);
+        }
         bool wrapped = drwrap_wrap(orig, wrap_pre_tx_start, NULL);
-        if (wrapped) { dr_printf("function \"%s\" is wrapped..\n", func_name); }
+        if (wrapped) {
+            if(verbose){
+            dr_printf("function \"%s\" is wrapped..\n", func_name);
+            }
+        }
     }
 
     func_name = "sm_op_end";
@@ -175,10 +206,52 @@ module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
 
     if (drsym_lookup_symbol(mod->full_path, func_name, &offs, DRSYM_DEMANGLE) == DRSYM_SUCCESS) {
         orig = offs + mod->start;
-        dr_printf("function \"%s\" is found..\n", func_name);
+        if(verbose) {
+            dr_printf("function \"%s\" is found..\n", func_name);
+        }
         bool wrapped = drwrap_wrap(orig, wrap_pre_tx_finish, NULL);
-        if (wrapped) { dr_printf("function \"%s\" is wrapped..\n", func_name); }
+        if (wrapped) {
+            if(verbose){ dr_printf("function \"%s\" is wrapped..\n", func_name);
+            }
+        }
     }
+
+    func_name = "state_machine_loop";
+
+
+    if (drsym_lookup_symbol(mod->full_path, func_name, &offs, DRSYM_DEMANGLE) == DRSYM_SUCCESS) {
+        orig = offs + mod->start;
+        if(verbose) {
+            dr_printf("function \"%s\" is found..\n", func_name);
+        }
+        bool wrapped = drwrap_wrap(orig, wrap_tx_start, wrap_tx_finish);
+        if (wrapped) {
+            if(verbose){
+            dr_printf("function \"%s\" is wrapped..\n", func_name);
+            }
+        }
+    }
+
+
+    /////
+    /* change pre and post  */
+    func_name = "setup_criu";
+
+
+    if (drsym_lookup_symbol(mod->full_path, func_name, &offs, DRSYM_DEMANGLE) == DRSYM_SUCCESS) {
+        orig = offs + mod->start;
+        if(verbose) {
+            dr_printf("function \"%s\" is found..\n", func_name);
+        }
+        bool wrapped = drwrap_wrap(orig, wrap_tx_start_criu, wrap_tx_finish_criu);
+        if (wrapped) {
+            if(verbose){
+                dr_printf("function \"%s\" is wrapped..\n", func_name);
+            }
+        }
+    }
+
+     //////
     /* This methos is called multiple times, but we only need to open the file once */
     if(!file_was_created) {
         file_was_created = true;
@@ -213,14 +286,17 @@ module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
            drwrap_wrap(towrap2, wrap_pre2, wrap_post2);
 #ifdef SHOW_RESULTS
        if (ok) {
-           dr_fprintf(STDERR, "<wrapped " MALLOC_ROUTINE_NAME " @" PFX "\n", towrap);
-           dr_fprintf(STDERR,   "%ld %ld \n", (long)getpid(), (long)getppid());
+           if(verbose) {
+               dr_fprintf(STDERR, "<wrapped " MALLOC_ROUTINE_NAME " @" PFX "\n", towrap);
+               dr_fprintf(STDERR, "%ld %ld \n", (long)getpid(), (long)getppid());
+           }
        } else {
-
-           dr_fprintf(STDERR,
-                      "<FAILED to wrap " MALLOC_ROUTINE_NAME " @" PFX
-                      ": already wrapped?\n",
-                      towrap);
+           if(verbose) {
+               dr_fprintf(STDERR,
+                          "<FAILED to wrap " MALLOC_ROUTINE_NAME " @" PFX
+                          ": already wrapped?\n",
+                          towrap);
+           }
        }
 #endif
    }
@@ -229,36 +305,207 @@ module_load_event(void *drcontext, const module_data_t *mod, bool loaded)
 static bool tx_active = false;
 static void
 wrap_pre_tx_start(void *wrapcxt, OUT void **user_data){
-    perror("Starting a new transaction \n");
+    if(verbose) {
+        //perror("Starting a new transaction \n");
+    }
+    // No idea how i can use it
+    enum pobj_tx_stage tx_stage =  pmemobj_tx_stage();
+    printf("TX stage before init: %u\n", tx_stage);
+
+    /*
+    if(rootp->tx_is_running){
+        perror("Failure recovery mode\n");
+        //pmemobj_tx_end();
+        perror("Recovery is complete!\n");
+    }
+     */
+    //pmemobj_tx_abort(0);
+    //pmemobj_tx_end();
+    /*
+    if(rootp->tx_is_running){
+        perror("Transaction was not supposed to be active at this moment!\n");
+        perror("Aborting!\n");
+        pmemobj_tx_abort(1);
+    }
+    printf("Initializing transaction\n");
+*/
+    //if(rootp->tx_is_running){
+        //perror("Transaction was not supposed to be active at this moment!\n");
+        //perror("Recovering!\n");
+        /* Need to reinitialize here */
+        //
+    /*
+        perror("Closing old pool connector\n");
+        pmemobj_close(pop);
+        perror("Initialising a new pool!\n");
+        //initialize(128000000);
+
+
+        char *path_to_pmem = calloc(200, 1);
+        create_unique_file_name(path_to_pmem);
+        if ((pop = pmemobj_open(path_to_pmem, POBJ_LAYOUT_NAME(list))) == NULL) {
+                perror("failed to open pool\n");
+        }
+
+        if(verbose) {
+            printf("Pool is provisioned!\n");
+        }
+        root = pmemobj_root(pop, sizeof(struct my_root));
+        rootp = pmemobj_direct(root);
+
+        if(verbose) {
+            printf("Setting up initial values.\n");
+        }
+        printf("Offset is: %lu\n", rootp->offset);
+        //rootp->offset = 0;
+        rootp->tx_is_running = false;
+        rootp->recovery_count = 0;
+        //long *t = &rootp->oofset;
+        //t = 0;
+        //uintptr_t *start = (uintptr_t *)rootp->pmem_start;
+        //uintptr_t *current = (uintptr_t *)rootp->next_available_slot;
+        //rootp->next_available_slot = rootp->pmem_start;
+        //rootp->next_available_slot = start;
+        if(verbose) {
+            printf("Setting is done!\n");
+        }
+        //exit(1);
+        //return;
+        //
+    //}
+     */
     pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
                      TX_PARAM_NONE);
-
+    perror("Transaction started!");
+    tx_stage =  pmemobj_tx_stage();
+    printf("TX stage: %u\n", tx_stage);
+    rootp->tx_is_running = true;
+    pmemobj_flush(pop, &rootp->tx_is_running,10);
     tx_active = true;
+    printf("Wrap pre tx is finished\n");
 }
 static void
 wrap_pre_tx_finish(void *wrapcxt, OUT void **user_data){
-    perror("Commiting transaction! \n");
+    if(verbose) {
+        perror("Commiting transaction! \n");
+    }
+    pmemobj_tx_commit();
+    pmemobj_tx_end();
+    rootp->tx_is_running = false;
+    tx_active = false;
+}
+
+
+/**
+ * These 2 a very hacky and the idea here is that
+ * if criu snapshot is taken in the middle of a transaction
+ * it will be recovered with transactional information being
+ * stored on the stack. This stack variable would point
+ * to the position of the undo log and hence we can trigger
+ * an abort of a transaction, which has not commited.
+ *
+ */
+int counter = 0;
+static void
+wrap_tx_start_criu(void *wrapcxt, OUT void **user_data){
+    if(counter == 0){
+        /* Try starting and ending a transaction to clear an undo log */
+        //enum pobj_tx_stage tx_stage;
+        pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL,
+                         TX_PARAM_NONE);
+        //setup_criu();
+        //tx_stage =  pmemobj_tx_stage();
+        //printf("TX stage : %u\n", tx_stage);
+        //pmemobj_tx_abort(-1);
+        //pmemobj_tx_end();
+
+        counter++;
+    }
+}
+
+static void
+wrap_tx_finish_criu(void *wrapcxt, OUT void *user_data){
+    enum pobj_tx_stage tx_stage;
+    tx_stage =  pmemobj_tx_stage();
+    printf("TX stage : %u\n", tx_stage);
+    perror("Aborting idle transaction! \n");
+    pmemobj_tx_abort(0);
+    pmemobj_tx_end();
+}
+
+static void
+wrap_tx_start(void *wrapcxt, OUT void **user_data){
+    printf("TX stage: %d\n", pmemobj_tx_stage());
+    if(pmemobj_tx_stage() > 0){
+        //if(verbose) {
+        printf("Commiting transaction!\n");
+        //}
+        pmemobj_tx_commit();
+        pmemobj_tx_end();
+        tx_active = false;
+    }
+    perror("17/01/2021");
+       // if(verbose) {
+            perror("Starting a new transaction \n");
+            /* Reinitialise here? */
+            if(pop == NULL){
+                printf("Pop was null!\n");
+            }
+            printf("Pop was not null!\n");
+            //printf("REINITIALIZING\n");
+            //if(condition){
+                //initialize(128000000);
+            //}
+            perror("Starting a new transaction \n");
+
+
+       // }
+        pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, log_stages, NULL, TX_PARAM_NONE);
+
+        printf("Transaction started!\n");
+        tx_active = true;
+
+}
+static void
+wrap_tx_finish(void *wrapcxt, OUT void *user_data){
+    if(verbose) {
+        perror("Commiting transaction! \n");
+    }
+    perror("Does this ever get executed?\n");
     pmemobj_tx_commit();
     pmemobj_tx_end();
     tx_active = false;
 }
-
+int number_of_times_mmap_called = 0;
+long total_mmaped = 0;
 static void
 wrap_pre(void *wrapcxt, OUT void **user_data)
 {
     /* 0 for malloc, 1 for mmap */
    size_t sz = (size_t)drwrap_get_arg(wrapcxt, IF_WINDOWS_ELSE(2, 1));
-   printf("MMAP size: %zu \n", sz);
+   if(verbose){
+       printf("MMAP size: %zu \n", sz);
+       total_mmaped = total_mmaped + sz;
+       printf("Total mmaped: %lu \n", total_mmaped);
+       number_of_times_mmap_called++;
+       printf("mamp called %d times\n", number_of_times_mmap_called);
+   }
+
+
    *user_data = (void *)sz;
 }
-
+int number_of_times_munmap_called = 0;
 static void
 wrap_pre2(void *wrapcxt, OUT void **user_data)
 {
     /* Need to match this with PMEMoid or file and release */
     //void *addr = (void *)(size_t)drwrap_get_arg(wrapcxt, 1);
     //munmap()
-    perror("munmap called");
+    if(verbose) {
+        perror("munmap called");
+        number_of_times_munmap_called++;
+        printf("number_of_times_munmap_called: %d\n", number_of_times_munmap_called);
+    }
 }
 
 static void
@@ -271,6 +518,8 @@ wrap_post2(void *wrapcxt, void *user_data)
 /**
  *
  */
+bool refresh_only = false;
+
 static struct my_root *rootp;
 void initialize(size_t requested_pool_size){
 
@@ -278,7 +527,9 @@ void initialize(size_t requested_pool_size){
     char *path_to_pmem = calloc(200, 1);
     create_unique_file_name(path_to_pmem);
     size_t pool_size = requested_pool_size;
-    printf("Requested pool size: %zu MB\n", pool_size/1000000);
+    if(verbose) {
+        printf("Requested pool size: %zu MB\n", pool_size / 1000000);
+    }
     if(pool_size < PMEMOBJ_MIN_POOL){
         pool_size = PMEMOBJ_MIN_POOL;
     }
@@ -293,26 +544,44 @@ void initialize(size_t requested_pool_size){
             perror("failed to open pool\n");
         }
     }
-    printf("Pool is provisioned!\n");
-    //root = pmemobj_root(pop, sizeof(struct my_root));
-    //rootp = pmemobj_direct(root);
-    printf("Setting up initial values.\n");
-    //rootp->oofset = 0;
+    if(verbose) {
+        printf("Pool is provisioned!\n");
+    }
+    root = pmemobj_root(pop, sizeof(struct my_root));
+    rootp = pmemobj_direct(root);
+
+    //PMEMoid pmeMoid = pmemoi
+
+    if(refresh_only){
+        pmemobj_close(pop);
+        printf("Only running to refresh the file\n");
+        exit(1);
+    }
+
+    if(verbose) {
+        printf("Setting up initial values.\n");
+    }
+    rootp->offset = 0;
+    rootp->tx_is_running = false;
+    rootp->recovery_count = 0;
     //long *t = &rootp->oofset;
     //t = 0;
     //uintptr_t *start = (uintptr_t *)rootp->pmem_start;
     //uintptr_t *current = (uintptr_t *)rootp->next_available_slot;
     //rootp->next_available_slot = rootp->pmem_start;
     //rootp->next_available_slot = start;
-    printf("Setting is done!\n");
+    if(verbose) {
+        printf("Setting is done!\n");
+    }
 }
 
 /* Needs to be inside a transaction, otherwise this space is wasted */
-static long offset = 0;
+//static long offset = 0;
 void *allocate_space_on_pmem(size_t size){
     /* Case if pmem is free */
-    printf("start\n");
-
+    if(verbose) {
+        printf("start\n");
+    }
     root = pmemobj_root(pop, sizeof(struct my_root));
     rootp = pmemobj_direct(root);
 
@@ -320,18 +589,28 @@ void *allocate_space_on_pmem(size_t size){
     //memcpy(t, &rootp->oofset, sizeof (long));
     //printf("Managed to read value! %lu\n", *t);
     void *currently_available_slot;
-    if(offset == 0){
-        printf("Pmem is empty\n");
-        offset = size+10000;
-        printf("ADDR: %p \n", rootp->pmem_start);
+    if(rootp->offset == 0){
+        if(verbose) {
+            printf("Pmem is empty\n");
+        }
+        rootp->offset = size+10000;
+        if(verbose) {
+            printf("ADDR: %p \n", rootp->pmem_start);
+        }
         return rootp->pmem_start;
     } else{
         /* Case if there is a reserved region on pmem */
-        printf("Pmem is used\n");
-        currently_available_slot = rootp->pmem_start + offset+10000;
-        printf("ADDR: %p \n", currently_available_slot);
-        offset = offset + size+10000;
-        printf("end\n");
+        if(verbose) {
+            printf("Pmem is used\n");
+        }
+        currently_available_slot = rootp->pmem_start + rootp->offset+10000;
+        if(verbose) {
+            printf("ADDR: %p \n", currently_available_slot);
+        }
+        rootp->offset = rootp->offset + size+10000;
+        if(verbose) {
+            printf("end\n");
+        }
     }
 
     return currently_available_slot;
@@ -353,13 +632,20 @@ wrap_post(void *wrapcxt, void *user_data)
 
    //drwrap_set_retval(wrapcxt, rootp->this_is_on_pmem);
    //drwrap_set_retval(wrapcxt, create_and_map_persistent_memory_pool());
-   printf("Allocating space \n");
+   if(verbose) {
+       printf("Allocating space \n");
+   }
    if(!initialized){
        //initialize(128000000);
        //initialized = true;
    }
    void *ptr = allocate_space_on_pmem(sz);
-   printf("Space was allocated\n");
+   if(verbose) {
+       printf("Space was allocated\n");
+   }
+   void *ret_ptr = drwrap_get_retval(wrapcxt);
+   printf("Original return value: %p is replaced with pmem: %p\n", ret_ptr, ptr);
+
    drwrap_set_retval(wrapcxt, ptr);
    //}
 #endif
@@ -471,7 +757,7 @@ static void catch_mem_ref(uintptr_t *addr, uintptr_t *pc, uint size){
 
    /* Check if this operation is updating persistent memory */
    if(addr >= start && addr <=finish && tx_active == true){
-       perror("Adding to transaction \n");
+       //print_with_log_level("Adding to transaction");
        pmemobj_tx_add_range_direct(addr, 64);
        /* Uncoment to text crash consistency */
 
@@ -883,18 +1169,32 @@ static void *create_and_map_persistent_memory_pool(){
 /* End */
 
 void sig_handler(int signum){
-    printf("Handling signal \n");
+    //if(verbose) {
+        printf("Handling signal \n");
+    //}
     pmemobj_tx_abort(-1);
     exit(1);
 }
 
+
+
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
+    if(argc>1){
+        if(strcmp(argv[1], "refresh_file_only") == 0){
+            refresh_only = true;
+        }
+    }
     /* */
+    //printf("ARG 1: %s \n", argv[1]);
+    //if(strcmp(argv[1], "verbose") == 0){
+    //    verbose = true;
+    //}
     //initialize(64000000);
     /* Handles cases for both programs */
-    signal(SIGUSR1,sig_handler);
+    //signal(SIGUSR1,sig_handler);
+    //signal(SIGINT, sig_handler);
 
    drreg_options_t ops = { sizeof(ops), 4 /*max slots needed*/, false };
    dr_set_client_name("DynamoRIO Sample Client 'memval'", "http://dynamorio.org/issues");
